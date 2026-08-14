@@ -1,0 +1,20 @@
+# Python Bytecode & Environments
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+env/
+
+# ML Engine Artifacts & Local DBs
+.chroma/
+chroma_db/
+mlruns/
+*.pth
+assets/*.png
+
+# Environment Secrets
+.env
+
+# IDE Configs
+.vscode/
+.idea/
