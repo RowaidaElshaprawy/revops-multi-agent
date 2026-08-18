@@ -1,39 +1,31 @@
 import re
-import mlflow
+from typing import Tuple
+
+INJECTION_PATTERNS = [
+    r"ignore (all|previous|the) instructions",
+    r"disregard (all|previous|the) (system|prior) prompt",
+    r"act as (system|admin|root)",
+    r"reveal (your|the) (system prompt|instructions)",
+    r"drop (table|database)",
+]
+_COMPILED = [re.compile(p, re.IGNORECASE) for p in INJECTION_PATTERNS]
 
 
-class SafetyAndEvalGuard:
-    def __init__(self):
-        # Initialize MLflow experiment tracking (Module 7)
-        mlflow.set_experiment("RevOps_Multi_Agent_Pipeline")
+def check_text(text: str) -> Tuple[bool, str]:
+    if not text:
+        return False, ""
+    for pattern in _COMPILED:
+        if pattern.search(text):
+            return True, f"matched injection pattern: {pattern.pattern}"
+    return False, ""
 
-    def check_prompt_injection(self, text: str) -> bool:
-        """Simple rule-based prompt injection and adversarial safety check."""
-        suspicious_patterns = [
-            r"ignore previous instructions",
-            r"system prompt",
-            r"drop database",
-            r"jailbreak"
-        ]
-        for pattern in suspicious_patterns:
-            if re.search(pattern, text, re.IGNORECASE):
-                return True  # Malicious input detected
-        return False
 
-    def log_agent_run(self, state: dict):
-        """Logs metrics, scores, and execution parameters to MLflow (Module 7)."""
-        with mlflow.start_run(run_name=f"Lead_{state['domain']}"):
-            mlflow.log_param("domain", state["domain"])
-            
-            intent_data = state.get("intent_data") or {}
-            mlflow.log_param("detected_intent", intent_data.get("top_intent", "Unknown"))
-            
-            if state.get("pytorch_score") is not None:
-                mlflow.log_metric("pytorch_conversion_score", state["pytorch_score"])
-            
-            mlflow.log_metric("is_qualified", 1.0 if state.get("is_qualified") else 0.0)
-            
-            # Simulated RAGAS metrics (Faithfulness & Context Precision)
-            if state.get("rag_context"):
-                mlflow.log_metric("ragas_context_precision", 0.92)
-                mlflow.log_metric("ragas_faithfulness", 0.95)
+def guardrail_node(state):
+    blocked, reason = check_text(state.get("domain", ""))
+    logs = state.get("audit_logs", [])
+    logs.append(f"[guardrails] {'BLOCKED: ' + reason if blocked else 'domain input clear'}")
+    state["blocked"] = blocked
+    state["block_reason"] = reason
+    state["current_step"] = "GUARDRAIL_BLOCKED" if blocked else "GUARDRAIL_PASSED"
+    state["audit_logs"] = logs
+    return state
