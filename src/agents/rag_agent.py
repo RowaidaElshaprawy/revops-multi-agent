@@ -3,6 +3,21 @@ from typing import List
 from langchain_community.vectorstores import Chroma
 from langchain_community.embeddings import FakeEmbeddings # High-speed local embeddings for dev
 from langchain_core.documents import Document
+from sqlalchemy.orm import Session
+from pgvector.sqlalchemy import Vector
+from src.database.models import CaseStudyVectorModel
+
+def retrieve_case_studies_postgres(db_session: Session, industry: str, query_embedding: list[float], limit: int = 2):
+    """Retrieves top matching case studies using PostgreSQL pgvector cosine similarity."""
+    results = (
+        db_session.query(CaseStudyVectorModel)
+        .filter(CaseStudyVectorModel.industry == industry)
+        .order_by(CaseStudyVectorModel.embedding.cosine_distance(query_embedding))
+        .limit(limit)
+        .all()
+    )
+    
+    return [doc.content for doc in results]
 
 class RAGKnowledgeAgent:
     def __init__(self):
